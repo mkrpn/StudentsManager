@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Options;
+using StudentsManager.Models;
 using StudentsManager.Models.Zoom;
 
 namespace StudentsManager.Services
@@ -8,8 +9,8 @@ namespace StudentsManager.Services
         readonly HttpService httpService;
         const string baseUrl = "https://api.zoom.us/v2";
 
-        public ZoomService(IOptions<ZoomConfig> config, HttpService httpService, Oauth2TokensService oauth2TokensService,
-            AppConfigService configService): base(oauth2TokensService, configService, config.Value)
+        public ZoomService(IOptions<ZoomConfig> config, IOptions<AppSettings> appSettings, HttpService httpService, Oauth2TokensService oauth2TokensService,
+            AppConfigService configService): base(oauth2TokensService, configService, config.Value, appSettings.Value.AuthCodeReceivingTimeoutSeconds)
         {
             this.httpService = httpService;
         }

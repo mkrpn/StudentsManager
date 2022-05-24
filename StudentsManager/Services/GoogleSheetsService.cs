@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Options;
 using System.Text.RegularExpressions;
 using StudentsManager.Models.GoogleSheets;
+using StudentsManager.Models;
 
 namespace StudentsManager.Services
 {
@@ -9,8 +10,8 @@ namespace StudentsManager.Services
         readonly HttpService httpService;
         const string baseUrl = "https://content-sheets.googleapis.com/v4/spreadsheets";
 
-        public GoogleSheetsService(IOptions<GoogleSheetsConfig> config, HttpService httpService, Oauth2TokensService oauth2TokensService,
-            AppConfigService configService) : base(oauth2TokensService, configService, config.Value)
+        public GoogleSheetsService(IOptions<GoogleSheetsConfig> config, IOptions<AppSettings> appSettings, HttpService httpService, Oauth2TokensService oauth2TokensService,
+            AppConfigService configService) : base(oauth2TokensService, configService, config.Value, appSettings.Value.AuthCodeReceivingTimeoutSeconds)
         {
             this.httpService = httpService;
         }

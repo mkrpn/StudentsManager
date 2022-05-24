@@ -24,6 +24,9 @@ namespace StudentsManager.Models
         [Required]
         public string ZoomMeetingId { get; set; }
 
+        [Required]
+        public int AuthCodeReceivingTimeoutSeconds { get; set; }
+
         public string PresentText { get; set; }
 
         public string NotPresentText { get; set; }

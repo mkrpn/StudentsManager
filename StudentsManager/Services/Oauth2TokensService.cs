@@ -3,19 +3,21 @@ using Newtonsoft.Json;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace StudentsManager.Services
 {
     public class Oauth2TokensService
     {
-        public async Task GetOauthToken(Oauth2Config oauth2Config)
+        public async Task GetOauthToken(Oauth2Config oauth2Config, int authCodeReceivingTimeoutSeconds)
         {
             CodeGrantOauth auth = new CodeGrantOauth(oauth2Config);
 
             if (string.IsNullOrEmpty(oauth2Config.RefreshToken))
             {
-                await auth.Oauth2Authorize();
+                await auth.Oauth2Authorize(authCodeReceivingTimeoutSeconds);
 
                 if (!string.IsNullOrEmpty(auth.Error))
                 {
@@ -29,7 +31,7 @@ namespace StudentsManager.Services
                 if (!string.IsNullOrEmpty(auth.Error))
                 {
                     oauth2Config.RefreshToken = null;
-                    await GetOauthToken(oauth2Config);
+                    await GetOauthToken(oauth2Config, authCodeReceivingTimeoutSeconds);
                 }
             }
         }
@@ -49,11 +51,11 @@ namespace StudentsManager.Services
                 this.config = config;
             }
 
-            public async Task Oauth2Authorize()
+            public async Task Oauth2Authorize(int authCodeReceivingTimeout)
             {
                 try
                 {
-                    authorizationCode = GetAuthCode();
+                    authorizationCode = await GetAuthCode(authCodeReceivingTimeout);
 
                     var tokenData = await GetToken(this.config.AccessTokenUrl, GRANT_TYPE_AUTHORIZATION_CODE);
 
@@ -89,7 +91,7 @@ namespace StudentsManager.Services
             }
 
             #region Private
-            string GetAuthCode()
+            async Task<string> GetAuthCode(int authCodeReceivingTimeoutSeconds)
             {
                 using (var httpListener = new HttpListener())
                 {
@@ -100,12 +102,34 @@ namespace StudentsManager.Services
                     var url = string.Format("{0}?client_id={1}&scope={2}&response_type=code&redirect_uri={3}",
                         config.AuthUrl, config.ClientId, config.Scope, config.CallbackUrl);
 
-                    Process.Start(new ProcessStartInfo("cmd", "/c start \"\" \"" + url + "\"")
-                    {
-                        CreateNoWindow = true
-                    });
+                    OpenBrowser(url);
 
-                    return httpListener.GetContext().Request.QueryString.Get("code");
+                    var cancellationToken = new CancellationTokenSource();
+
+                    cancellationToken.CancelAfter(authCodeReceivingTimeoutSeconds * 1000);
+
+                    var code = await ReceiveCode(httpListener, cancellationToken.Token);
+
+                    return code;
+                }
+            }
+
+            private async Task<string> ReceiveCode(HttpListener httpListener, CancellationToken ct)
+            {
+                ct.Register(() =>
+                {
+                    httpListener.Stop();
+                });
+
+                try
+                {
+                    var context = await httpListener.GetContextAsync();
+
+                    return context.Request.QueryString.Get("code");
+                }
+                catch when (ct.IsCancellationRequested)
+                {
+                    throw new Exception("Auth Code receiving timeout! Please, restart program and try again.");
                 }
             }
 
@@ -144,6 +168,32 @@ namespace StudentsManager.Services
                     }
 
                     return JsonConvert.DeserializeObject<AccessTokenData>(jsonContent);
+                }
+            }
+
+            private void OpenBrowser(string url)
+            {
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    url = Regex.Replace(url, "(\\\\*)\"", "$1$1\\\"");
+                    url = Regex.Replace(url, "(\\\\+)$", "$1$1");
+                    Process.Start(new ProcessStartInfo("cmd", "/c start \"\" \"" + url + "\"")
+                    {
+                        CreateNoWindow = true
+                    });
+                }
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    Process.Start("xdg-open", url);
+                }
+                else if(RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                {
+                    throw new NotSupportedException(
+                        "Failed to launch browser for authorization; platform not supported.");
+                }
+                else
+                {
+                    Process.Start("open", url);
                 }
             }
             #endregion
