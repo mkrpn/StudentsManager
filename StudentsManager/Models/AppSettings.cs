@@ -7,7 +7,7 @@ namespace StudentsManager.Models
         public const string ConfigName = "AppSettings";
 
         [Required]
-        public Dictionary<string, string> GoogleSheetsToZoomMap { get; set; }
+        public Dictionary<string, List<string>> GoogleSheetsToZoomMap { get; set; }
 
         [Required]
         public string GoogleSheetId { get; set; }
@@ -26,6 +26,9 @@ namespace StudentsManager.Models
 
         [Required]
         public int AuthCodeReceivingTimeoutSeconds { get; set; }
+
+        [Required]
+        public List<string> SkipZoomCheckingNames { get; set; }
 
         public string PresentText { get; set; }
 

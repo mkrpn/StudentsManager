@@ -19,7 +19,7 @@ namespace StudentsManager.Services
             this.consoleService = consoleService;
         }
 
-        public async Task<bool> Init()
+        public async Task Init()
         {
             consoleService.WriteLine("Waiting for Google Sheets login ...");
             consoleService.WriteLine();
@@ -29,7 +29,24 @@ namespace StudentsManager.Services
             consoleService.WriteLine();
             await zoomService.Oauth2Login();
 
-            return await ValidateStudentsMap();
+            await ValidateGoogleSheetsStudentsMap();
+
+            var extraParticipants = await GetZoomExtraParticipants();
+
+            if (extraParticipants.Any())
+            {
+                consoleService.WriteError($"Found unexpected Zoom participants: {string.Join(", ", extraParticipants)}");
+                consoleService.WriteLine();
+            }
+        }
+
+        private async Task<IEnumerable<string>> GetZoomExtraParticipants()
+        {
+            var lastMeetingParticipants = await zoomService.GetMeetingParticipants(config.ZoomMeetingId);
+
+            return lastMeetingParticipants.Where(zoomPatricipant =>
+                !config.SkipZoomCheckingNames.Contains(zoomPatricipant) &&
+                !config.GoogleSheetsToZoomMap.Any(googleParticipants => googleParticipants.Value.Contains(zoomPatricipant)));
         }
 
         public void ShowPresence(Dictionary<string, bool> presenseStatuses)
@@ -58,41 +75,30 @@ namespace StudentsManager.Services
 
         public async Task MarkPresenseInGoogleSheets(Dictionary<string, bool> presenseStatuses)
         {
-            consoleService.WriteLine();
             var range = consoleService.EnterData("Enter sheet column to fill presense:", 
                 googleSheetsService.IsColumnNameValid);
 
             await UpdatePresenseInGoogleSheets(range, presenseStatuses);
-
-            consoleService.WriteLine();
-            consoleService.WriteLine("Google Sheets updated!");
         }
 
-        async Task<bool> ValidateStudentsMap()
+        async Task ValidateGoogleSheetsStudentsMap()
         {
             var studentNamesFromConfig = config.GoogleSheetsToZoomMap.Select(m => m.Key).ToArray();
             var studentNamesFromGoogleSheet = await googleSheetsService.GetRangeValues(config.GoogleSheetId, GetStudentsRange());
             var notFoundInMapStudents = studentNamesFromGoogleSheet.Where(n => !config.GoogleSheetsToZoomMap.ContainsKey(n));
-            var areMissingStudentsInMap = notFoundInMapStudents.Any();
 
-            if (areMissingStudentsInMap)
+            if (notFoundInMapStudents.Any())
             {
-                consoleService.WriteErrorline("Please, update 'GoogleSheetsToZoomMap' for:");
-
-                foreach (var studentName in notFoundInMapStudents)
-                {
-                    consoleService.WriteErrorline(studentName);
-                }
+                throw new Exception($"Please, update 'GoogleSheetsToZoomMap' for: {string.Join(", ", notFoundInMapStudents)}");
             }
-
-            return !areMissingStudentsInMap;
         }
 
         public async Task<Dictionary<string, bool>> GetLastMeetingPresence()
         {
             var lastMeetingParticipants = await zoomService.GetMeetingParticipants(config.ZoomMeetingId);
 
-            return config.GoogleSheetsToZoomMap.ToDictionary(k => k.Key, v => lastMeetingParticipants.Contains(v.Value));
+            return config.GoogleSheetsToZoomMap.ToDictionary(k => k.Key, 
+                v => v.Value.Any(mapParticipant => lastMeetingParticipants.Contains(mapParticipant)));
         }
 
         async Task UpdatePresenseInGoogleSheets(string columnNameToUpdate, Dictionary<string, bool> presenceDictionary)

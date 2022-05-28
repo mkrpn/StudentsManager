@@ -22,7 +22,7 @@ namespace StudentsManager.Services
 
             var response = await httpService.ExecuteRequest<ParticipantsResponse>(url, token, HttpMethod.Get);
 
-            return response.Participants.Select(p => p.Name).ToList();
+            return response.Participants.Select(p => p.Name).Distinct().ToList();
         }
     }
 }

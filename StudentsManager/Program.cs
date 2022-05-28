@@ -12,11 +12,17 @@ try
     consoleService.WriteLine();
 
     await studentsService.Init();
+
     var lastMeetingPresense = await studentsService.GetLastMeetingPresence();
 
     studentsService.ShowPresence(lastMeetingPresense);
 
+    consoleService.WriteLine();
+
     await studentsService.MarkPresenseInGoogleSheets(lastMeetingPresense);
+
+    consoleService.WriteLine();
+    consoleService.WriteLine("Google Sheets updated!");
 }
 catch(OptionsValidationException ex)
 {
